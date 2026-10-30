@@ -1,4 +1,9 @@
-node_modules/
 data/base-codes.json
 data/price-cache-hc.json
 data/price-cache-sc.json
+
+# Local investigation reports, evidence, and download bundles
+/.local-artifacts/
+
+# Rust build outputs
+/target/
