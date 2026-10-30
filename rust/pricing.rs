@@ -195,16 +195,28 @@ pub(crate) mod test_http {
                         Err(e) => panic!("fixture accept: {e}"),
                     }
                 };
+                // Windows propagates the listener's non-blocking flag to accepted
+                // sockets, so the first read can fail with WSAEWOULDBLOCK before the
+                // client's request arrives. Force blocking mode on the connection.
+                stream.set_nonblocking(false).unwrap();
                 stream
                     .set_read_timeout(Some(Duration::from_secs(2)))
                     .unwrap();
                 let mut request = Vec::new();
                 let mut byte = [0];
                 while !request.ends_with(b"\r\n\r\n") {
-                    if stream.read(&mut byte).unwrap() == 0 {
-                        break;
+                    match stream.read(&mut byte) {
+                        Ok(0) => break,
+                        Ok(_) => request.push(byte[0]),
+                        // A read timeout means the request never completed.
+                        Err(e)
+                            if e.kind() == std::io::ErrorKind::WouldBlock
+                                || e.kind() == std::io::ErrorKind::TimedOut =>
+                        {
+                            break;
+                        }
+                        Err(e) => panic!("fixture read: {e}"),
                     }
-                    request.push(byte[0]);
                 }
                 let _ = tx.send(String::from_utf8(request).unwrap());
                 thread::sleep(delay);
